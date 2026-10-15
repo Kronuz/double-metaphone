@@ -1,5 +1,7 @@
 # double-metaphone
 
+[![CI](https://github.com/Kronuz/double-metaphone/actions/workflows/ci.yml/badge.svg)](https://github.com/Kronuz/double-metaphone/actions/workflows/ci.yml)
+
 A small, standalone **Double Metaphone** phonetic encoder for C++20. It turns a
 word into two phonetic keys so that words that sound alike collapse to the same
 string, even when their spellings have nothing in common.
