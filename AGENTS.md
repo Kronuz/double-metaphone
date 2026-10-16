@@ -14,7 +14,9 @@ test/test.cc           Runnable smoke test: documented vectors, homophone collap
 examples/demo.cc       Runnable tour (not a test): prints primary/alternate keys per group.
 CMakeLists.txt         Compiled library `double_metaphone` (+ alias double_metaphone::double_metaphone); CTest test `double_metaphone`.
 LICENSE                MIT, Copyright (c) 2015-2019 Dubalu LLC.
-README.md              What it is, install, usage.
+README.md                    What it is, install, quick start.
+docs/API.md                  The encoder's API and how to compare keys.
+docs/double-metaphone.d2     The README diagram's source (docs/double-metaphone.svg is rendered from it).
 ARCHITECTURE.md        Internal design: the class, the single-pass encoder, standard P handling.
 ```
 

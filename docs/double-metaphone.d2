@@ -1,0 +1,15 @@
+# double-metaphone: two keys per word; words match if any keys agree.
+# Render: d2 --layout elk --sketch --theme 302 docs/double-metaphone.d2 docs/double-metaphone.svg
+direction: right
+
+smith: '"Smith"' {
+  label: "\"Smith\"\nprimary SM0 · alternate XMT"
+}
+schmidt: '"Schmidt"' {
+  label: "\"Schmidt\"\nprimary XMT · alternate SMT"
+}
+match: XMT {
+  label: "shared key: XMT\n→ a match Soundex misses"
+}
+smith -> match
+schmidt -> match
