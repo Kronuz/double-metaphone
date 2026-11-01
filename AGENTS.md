@@ -11,12 +11,13 @@ easy to fall into.
 double_metaphone.h     Public class DoubleMetaphone (declaration + small inline methods). Header.
 double_metaphone.cc    The encoder: encode_keys<Mode>() and its Word/Keys helpers and rule switch; encode, encode_alternate and encode_both instantiate it.
 test/test.cc           Runnable smoke test: documented vectors, homophone collapse, interface.
+test/copy_move.cc      Copies and moves of DoubleMetaphone (non-const lvalue, const lvalue, rvalue, const rvalue, derived, in containers). CTest `double_metaphone_copy`.
 test/diff_test.cc      Differential test (CTest `double_metaphone_diff`): every key of 7M inputs (all strings up to 4 letters, reduced alphabets, random text, /usr/share/dict/words) against the frozen original.
 test/double_metaphone_old.{h,cc}  Frozen copy of the encoder at 91c17a2, class DoubleMetaphoneOld. The oracle of diff_test.cc and the baseline of bench/bench.cc. Never edit it.
 bench/bench.cc         Benchmark against the frozen copy (DOUBLE_METAPHONE_BUILD_BENCH=ON), with an A/A column.
 tools/mutants.py       Breaks the encoder's primitives in 19 ways and requires test/diff_test.cc to fail on each.
 examples/demo.cc       Runnable tour (not a test): prints primary/alternate keys per group.
-CMakeLists.txt         Compiled library `double_metaphone` (+ alias double_metaphone::double_metaphone); CTest tests `double_metaphone` and `double_metaphone_diff`.
+CMakeLists.txt         Compiled library `double_metaphone` (+ alias double_metaphone::double_metaphone); CTest tests `double_metaphone`, `double_metaphone_copy` and `double_metaphone_diff`.
 LICENSE                MIT, Copyright (c) 2015-2019 Dubalu LLC.
 CHANGELOG.md           Dated changes, with measurements.
 README.md                    What it is, install, quick start.

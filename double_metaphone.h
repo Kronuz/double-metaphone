@@ -25,6 +25,7 @@
 
 #include <string>                                 // for std::string
 #include <string_view>                            // for std::string_view
+#include <type_traits>                            // for std::is_base_of_v, std::remove_cvref_t
 #include <utility>                                // for std::forward, std::pair
 
 
@@ -74,8 +75,11 @@ public:
 	DoubleMetaphone() = default;
 
 	// Construct from a word: encodes it and caches the PRIMARY key in
-	// `_code_str`. `encode()` reads that back.
+	// `_code_str`. `encode()` reads that back. It takes a word, never an encoder:
+	// for a non-const lvalue (or a const rvalue) a forwarding constructor would
+	// otherwise beat the copy constructor.
 	template <typename T>
+		requires (!std::is_base_of_v<DoubleMetaphone, std::remove_cvref_t<T>>)
 	DoubleMetaphone(T&& str)
 		: _code_str(encode(std::string_view(std::forward<T>(str)))) { }
 

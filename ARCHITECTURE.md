@@ -35,6 +35,11 @@ the soundex surface so it drops in where a soundex encoder is used:
 - `encode_alternate(word)` and `encode_both(word)` expose the richer two-key API.
 - `name()` / `description()`.
 
+The constructor that takes a word is constrained with
+`requires (!std::is_base_of_v<DoubleMetaphone, std::remove_cvref_t<T>>)`, so a copy from
+a non-const lvalue or a const rvalue reaches the copy constructor instead of trying to
+encode the encoder.
+
 `encode`, `encode_alternate` and `encode_both` run the same walk, which is a
 template over which keys to build. `encode_both` builds both in one pass (cheaper
 than two calls, and the two readings are built in lockstep anyway). `encode`

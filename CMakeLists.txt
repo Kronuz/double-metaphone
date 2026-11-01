@@ -22,6 +22,11 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   target_link_libraries(double_metaphone_test PRIVATE double_metaphone)
   add_test(NAME double_metaphone COMMAND double_metaphone_test)
 
+  # Copies and moves of the encoder, from non-const lvalues included.
+  add_executable(double_metaphone_copy_test test/copy_move.cc)
+  target_link_libraries(double_metaphone_copy_test PRIVATE double_metaphone)
+  add_test(NAME double_metaphone_copy COMMAND double_metaphone_copy_test)
+
   # Differential test: every key against a frozen copy of the original encoder
   # (test/double_metaphone_old.*), exhaustive on short strings plus random inputs.
   add_executable(double_metaphone_diff_test test/diff_test.cc test/double_metaphone_old.cc)

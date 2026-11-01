@@ -6,6 +6,16 @@ library has no releases.
 
 ## 2026-10-31
 
+### Fixed
+
+- A copy of a `DoubleMetaphone` from a non-const lvalue (`DoubleMetaphone b = a;`) or from
+  a const rvalue did not compile: the forwarding constructor that takes a word is a better
+  match than the copy constructor there, and it tried to encode the encoder. It also broke
+  `vector::emplace_back(a)`, `std::make_unique<DoubleMetaphone>(a)` and
+  `std::optional<DoubleMetaphone>(a)` with a non-const `a`. The constructor now excludes
+  `DoubleMetaphone`, its derived classes and their cv-ref forms. Keys are unchanged.
+  `test/copy_move.cc` (`double_metaphone_copy`) covers it.
+
 ### Changed
 
 - `encode()` builds only the primary key and `encode_alternate()` only the alternate;
