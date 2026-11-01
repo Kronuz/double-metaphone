@@ -63,6 +63,27 @@ int main() {
   language-specific encoders.
 - ❌ Non-Latin scripts: it works on ASCII letters.
 
+## ⚡ Performance
+
+A call builds only the key it returns. `encode_both` builds both in one pass. A word of up
+to 118 bytes is cleaned on the stack, so a call allocates only for the returned strings
+(and not at all for keys that fit the string's inline buffer). Time per call on an Apple M4
+Pro (Apple clang 17, `-O3`), from `bench/bench.cc`:
+
+| input | `encode` | `encode_alternate` | `encode_both` |
+| --- | ---: | ---: | ---: |
+| dictionary word (3 to 12 letters) | 61 ns | 61 ns | 69 ns |
+| name (4 to 9 letters) | 72 ns | 69 ns | 77 ns |
+| phrase (40 to 80 characters) | 580 ns | 590 ns | 607 ns |
+| text (200 to 600 characters) | 2.9 µs | 3.1 µs | 3.0 µs |
+
+```sh
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DDOUBLE_METAPHONE_BUILD_BENCH=ON && cmake --build build
+./build/double_metaphone_bench /usr/share/dict/words
+```
+
+[CHANGELOG.md](CHANGELOG.md) lists the changes with their measurements.
+
 ## 📚 Documentation
 
 - [docs/API.md](docs/API.md): `encode`, `encode_alternate`, `encode_both`, and how

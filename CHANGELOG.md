@@ -1,0 +1,57 @@
+# Changelog
+
+Notable changes to double-metaphone, newest first. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); entries are dated because the
+library has no releases.
+
+## 2026-10-31
+
+### Changed
+
+- `encode()` builds only the primary key and `encode_alternate()` only the alternate;
+  `encode_both()` still builds both in one pass. Before, every call built both keys and
+  dropped the one it did not return. Output is identical. (`82ee696`)
+- The encoder cleans the word in one pass through a 256-entry table into a stack buffer
+  (a heap buffer above 118 bytes), between four blanks in front and six behind, notes the
+  Slavo-Germanic spellings (`W`, `K`, `CZ`, `WITZ`) in that pass, and writes the keys into
+  fixed buffers that are copied once into the returned strings. Before, it copied the word
+  into a `std::string`, scanned it again for those spellings with a bounds-clamping
+  substring compare at every position, and appended every sound class to two `std::string`s
+  with a length known only at run time. Output is identical. (`82ee696`)
+
+Time per call on an Apple M4 Pro (Apple clang 17, `-O3`), from `bench/bench.cc` under an
+exclusive hold. Before is the frozen encoder in `test/double_metaphone_old.cc`; each figure is
+the best of 9 passes, and the frozen encoder run against itself differs by 0.0% to 3.1%:
+
+| input | call | before | after | speedup |
+| --- | --- | ---: | ---: | ---: |
+| 100,000 dictionary words | `encode` | 132.2 ns | 60.8 ns | 2.18x |
+| | `encode_alternate` | 133.8 ns | 61.4 ns | 2.18x |
+| | `encode_both` | 134.3 ns | 68.9 ns | 1.95x |
+| 2,000 names | `encode` | 128.2 ns | 72.4 ns | 1.77x |
+| | `encode_alternate` | 126.2 ns | 68.6 ns | 1.84x |
+| | `encode_both` | 122.8 ns | 77.4 ns | 1.59x |
+| 20,000 phrases (40 to 80 characters) | `encode` | 1021.5 ns | 580.0 ns | 1.76x |
+| | `encode_alternate` | 1022.9 ns | 590.4 ns | 1.73x |
+| | `encode_both` | 1021.1 ns | 606.9 ns | 1.68x |
+| 200 texts (200 to 600 characters) | `encode` | 5633.3 ns | 2878.1 ns | 1.96x |
+| | `encode_alternate` | 5661.0 ns | 3127.9 ns | 1.81x |
+| | `encode_both` | 5683.5 ns | 3029.8 ns | 1.88x |
+
+Constructing an encoder from a word and reading `encode()` costs the same as `encode(word)`
+(2.20x, 1.78x, 1.74x and 1.98x on the four sets). On a dictionary word, a probe build that stops
+after cleaning the word takes 13 ns of the 61 ns; the rule walk takes about 37 ns and copying
+the key into the returned string about 7 ns.
+
+### Added
+
+- `test/diff_test.cc` compares `encode`, `encode_alternate` and `encode_both` with the frozen
+  encoder on every string up to four characters of the letters and a space, longer strings over
+  reduced alphabets built around the rule triggers, the dictionary, and random bytes, text and
+  syllable strings with lengths around every buffer boundary (7M inputs, CTest
+  `double_metaphone_diff`).
+- `tools/mutants.py` breaks the encoder's primitives in 19 ways; the differential test has to
+  fail on each.
+- `fuzz/fuzz_encode.cc`, a libFuzzer target of the same comparison (`DOUBLE_METAPHONE_FUZZ`).
+- `bench/bench.cc` (`DOUBLE_METAPHONE_BUILD_BENCH`) times all four calls against the frozen
+  encoder.
