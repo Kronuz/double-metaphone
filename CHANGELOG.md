@@ -4,6 +4,12 @@ Notable changes to double-metaphone, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); entries are dated because the
 library has no releases.
 
+## 2026-11-01
+
+### Added
+
+- `docs/perf/encoder-cost.md`: the method, the numbers on two machines, where a call goes, and the open items.
+
 ## 2026-10-31
 
 ### Fixed
@@ -29,8 +35,8 @@ library has no releases.
   substring compare at every position, and appended every sound class to two `std::string`s
   with a length known only at run time. Output is identical. (`82ee696`)
 
-Time per call on an Apple M4 Pro (Apple clang 17, `-O3`), from `bench/bench.cc` under an
-exclusive hold. Before is the frozen encoder in `test/double_metaphone_old.cc`; each figure is
+Time per call on an Apple M4 Pro (Apple clang 17, `-O3`), from `bench/bench.cc` with the machine
+to itself. Before is the frozen encoder in `test/double_metaphone_old.cc`; each figure is
 the best of 9 passes, and the frozen encoder run against itself differs by 0.0% to 3.1%:
 
 | input | call | before | after | speedup |
@@ -53,7 +59,7 @@ Constructing an encoder from a word and reading `encode()` costs the same as `en
 after cleaning the word takes 13 ns of the 61 ns; the rule walk takes about 37 ns and copying
 the key into the returned string about 7 ns.
 
-The same bench on an Intel i9-9980HK (Apple clang 17, `-O3`, exclusive hold; the frozen encoder
+The same bench on an Intel i9-9980HK (Apple clang 17, `-O3`, machine to itself; the frozen encoder
 run against itself differs by 0.0% to 5.2%), before and after in ns per call, with the speedup:
 
 | input | `encode` | `encode_alternate` | `encode_both` |

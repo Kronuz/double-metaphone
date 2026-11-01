@@ -85,7 +85,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DDOUBLE_METAPHONE_BUILD_BENCH=ON && c
 ./build/double_metaphone_bench /usr/share/dict/words
 ```
 
-[CHANGELOG.md](CHANGELOG.md) lists the changes with their measurements.
+[docs/perf/encoder-cost.md](docs/perf/encoder-cost.md) has the method, where a call goes and the open items. [CHANGELOG.md](CHANGELOG.md) lists the changes with their measurements.
 
 ## 📚 Documentation
 

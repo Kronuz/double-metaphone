@@ -23,6 +23,7 @@ CHANGELOG.md           Dated changes, with measurements.
 README.md                    What it is, install, quick start.
 docs/API.md                  The encoder's API and how to compare keys.
 docs/double-metaphone.d2     The README diagram's source (docs/double-metaphone.svg is rendered from it).
+docs/perf/encoder-cost.md    Method, numbers (Apple M4 Pro, Intel i9-9980HK) and open items of the one-key, one-pass encoder.
 ARCHITECTURE.md        Internal design: the class, the single-pass encoder, standard P handling.
 ```
 
