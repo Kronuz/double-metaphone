@@ -43,6 +43,16 @@ Constructing an encoder from a word and reading `encode()` costs the same as `en
 after cleaning the word takes 13 ns of the 61 ns; the rule walk takes about 37 ns and copying
 the key into the returned string about 7 ns.
 
+The same bench on an Intel i9-9980HK (Apple clang 17, `-O3`, exclusive hold; the frozen encoder
+run against itself differs by 0.0% to 5.2%), before and after in ns per call, with the speedup:
+
+| input | `encode` | `encode_alternate` | `encode_both` |
+| --- | ---: | ---: | ---: |
+| dictionary words | 258.5, 103.8 (2.49x) | 257.5, 102.8 (2.51x) | 255.8, 105.0 (2.44x) |
+| names | 239.4, 116.8 (2.05x) | 238.6, 117.4 (2.03x) | 240.0, 125.9 (1.91x) |
+| phrases | 2049.0, 896.7 (2.29x) | 2125.4, 907.8 (2.34x) | 2060.2, 946.5 (2.18x) |
+| texts | 10521.8, 4764.4 (2.21x) | 10615.9, 4788.4 (2.22x) | 10821.8, 4910.9 (2.20x) |
+
 ### Added
 
 - `test/diff_test.cc` compares `encode`, `encode_alternate` and `encode_both` with the frozen

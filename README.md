@@ -67,8 +67,8 @@ int main() {
 
 A call builds only the key it returns. `encode_both` builds both in one pass. A word of up
 to 118 bytes is cleaned on the stack, so a call allocates only for the returned strings
-(and not at all for keys that fit the string's inline buffer). Time per call on an Apple M4
-Pro (Apple clang 17, `-O3`), from `bench/bench.cc`:
+(and not at all for keys that fit the string's inline buffer). Time per call, from
+`bench/bench.cc`:
 
 | input | `encode` | `encode_alternate` | `encode_both` |
 | --- | ---: | ---: | ---: |
@@ -76,6 +76,9 @@ Pro (Apple clang 17, `-O3`), from `bench/bench.cc`:
 | name (4 to 9 letters) | 72 ns | 69 ns | 77 ns |
 | phrase (40 to 80 characters) | 580 ns | 590 ns | 607 ns |
 | text (200 to 600 characters) | 2.9 µs | 3.1 µs | 3.0 µs |
+
+On an Apple M4 Pro (Apple clang 17, `-O3`). On an Intel i9-9980HK the same rows take 104,
+103 and 105 ns; 117, 117 and 126 ns; 897, 908 and 947 ns; and 4.8, 4.8 and 4.9 µs.
 
 ```sh
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DDOUBLE_METAPHONE_BUILD_BENCH=ON && cmake --build build
