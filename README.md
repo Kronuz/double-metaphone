@@ -74,7 +74,13 @@ Not for:
 
 ## ⚡ Performance
 
-Time per call from `bench/bench.cc`, Apple clang 17 with `-O3`:
+Time per call from `double_metaphone_bench` (the best of 9 passes over each set, one call per
+item), Apple clang 17 with `-O3`, on an Apple M4 Pro (macOS 26, arm64) and an Intel Core i9-9980HK
+(macOS 15, x86-64). `encode` is the call that returns the primary key and `encode_both` the call
+that returns both keys. Rows are the input: dictionary words (the first 100,000 words of
+`/usr/share/dict/words`), names and phrases made from English-like syllables so that the common
+rules fire, and longer texts:
+
 
 | Input | `encode`, Apple M4 Pro | `encode_both`, Apple M4 Pro | `encode`, Intel Core i9-9980HK | `encode_both`, Intel Core i9-9980HK |
 | --- | ---: | ---: | ---: | ---: |
