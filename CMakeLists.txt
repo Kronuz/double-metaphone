@@ -22,6 +22,28 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   target_link_libraries(double_metaphone_test PRIVATE double_metaphone)
   add_test(NAME double_metaphone COMMAND double_metaphone_test)
 
+  # Differential test: every key against a frozen copy of the original encoder
+  # (test/double_metaphone_old.*), exhaustive on short strings plus random inputs.
+  add_executable(double_metaphone_diff_test test/diff_test.cc test/double_metaphone_old.cc)
+  target_link_libraries(double_metaphone_diff_test PRIVATE double_metaphone)
+  add_test(NAME double_metaphone_diff COMMAND double_metaphone_diff_test)
+
+  # Benchmark against the frozen original (not run by ctest).
+  option(DOUBLE_METAPHONE_BUILD_BENCH "Build bench/bench.cc" OFF)
+  if(DOUBLE_METAPHONE_BUILD_BENCH)
+    add_executable(double_metaphone_bench bench/bench.cc test/double_metaphone_old.cc)
+    target_link_libraries(double_metaphone_bench PRIVATE double_metaphone)
+  endif()
+
+  # libFuzzer target (clang): every key of arbitrary bytes against the frozen original.
+  option(DOUBLE_METAPHONE_FUZZ "Build the libFuzzer target" OFF)
+  if(DOUBLE_METAPHONE_FUZZ)
+    add_executable(double_metaphone_fuzz fuzz/fuzz_encode.cc test/double_metaphone_old.cc)
+    target_link_libraries(double_metaphone_fuzz PRIVATE double_metaphone)
+    target_compile_options(double_metaphone_fuzz PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all)
+    target_link_options(double_metaphone_fuzz PRIVATE -fsanitize=fuzzer,address,undefined)
+  endif()
+
   # A runnable tour of the library (not a test): build & run ./build/double_metaphone_demo
   add_executable(double_metaphone_demo examples/demo.cc)
   target_link_libraries(double_metaphone_demo PRIVATE double_metaphone)

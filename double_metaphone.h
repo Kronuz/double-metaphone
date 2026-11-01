@@ -80,10 +80,9 @@ public:
 		: _code_str(encode(std::string_view(std::forward<T>(str)))) { }
 
 	// PRIMARY Double Metaphone key for a fresh word. This is the drop-in entry
-	// point: a phonetic metric calls encode(a) / encode(b) and compares.
-	std::string encode(std::string_view word) const {
-		return encode_both(word).first;
-	}
+	// point: a phonetic metric calls encode(a) / encode(b) and compares. It
+	// builds only the primary key.
+	std::string encode(std::string_view word) const;
 
 	// The cached PRIMARY key (set at construction).
 	std::string encode() const {
@@ -91,10 +90,8 @@ public:
 	}
 
 	// ALTERNATE Double Metaphone key for a word. Equals the primary when the
-	// word has only one likely pronunciation.
-	std::string encode_alternate(std::string_view word) const {
-		return encode_both(word).second;
-	}
+	// word has only one likely pronunciation. It builds only the alternate key.
+	std::string encode_alternate(std::string_view word) const;
 
 	// Both keys at once: {primary, alternate}. Cheaper than two calls because
 	// the algorithm computes them together in a single pass.

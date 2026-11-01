@@ -35,28 +35,38 @@ the soundex surface so it drops in where a soundex encoder is used:
 - `encode_alternate(word)` and `encode_both(word)` expose the richer two-key API.
 - `name()` / `description()`.
 
-`encode` and `encode_alternate` are thin wrappers over `encode_both`, which
-computes both keys in one pass (cheaper than two calls, and the two readings
-are built in lockstep anyway).
+`encode`, `encode_alternate` and `encode_both` run the same walk, which is a
+template over which keys to build. `encode_both` builds both in one pass (cheaper
+than two calls, and the two readings are built in lockstep anyway). `encode`
+builds only the primary key and `encode_alternate` only the alternate: the walk
+decides every step from the word, never from a key, so a single-key walk takes
+the same steps and skips every append to the other key.
 
 ## The encoder
 
-`encode_both` is the whole algorithm. It has two internal helpers and a main
-loop.
+`encode_keys<Mode>` is the whole algorithm. It has a few internal helpers and a
+main loop.
 
-`Word` is a cursor over the cleaned input. The constructor upper-cases ASCII in
-place, keeps `A-Z` and collapsed interior spaces, and drops everything else
-(including UTF-8 high bytes, so non-ASCII input degrades to its letters). It then
-pads a few blanks past the end, so look-ahead like `at(i + 2)` is always
-in-bounds and reads as a non-letter rather than running off the buffer. Spaces
-survive because a few rules key off word boundaries in multi-word names
-(`SAN `, `VAN `, `VON `). Every index in the rules is relative to the first real
-letter, which is what the published algorithm means by "position 0".
+`Word` is a cursor over the cleaned input. The constructor makes one pass over
+the bytes through a 256-entry table: it upper-cases ASCII letters, keeps collapsed
+interior spaces and tabs, and drops everything else (including UTF-8 high bytes,
+so non-ASCII input degrades to its letters). The same pass notes whether the word
+has a `W`, a `K` or a `CZ`. The text sits between four blanks in front and six
+behind, so look-ahead and look-behind like `at(i + 2)` or `at(i - 4)` are plain
+loads that read as a non-letter. A word of up to 118 bytes is cleaned in a stack
+buffer; a longer one takes one heap allocation. `match_at` compares a string
+literal against the word and never reads the padding as content. Spaces survive
+because a few rules key off word boundaries in multi-word names (`SAN `, `VAN `,
+`VON `). Every index in the rules is relative to the first real letter, which is
+what the published algorithm means by "position 0".
 
-`Keys` collects the two outputs. `add(both)` pushes the same sound class onto
-both keys; `add(primary, alternate)` pushes different classes, which is how a
-word grows two readings. Most letters push the same thing onto both; the keys
-diverge only where a rule explicitly calls for it.
+`Keys` writes the outputs into buffers sized from the word (a step appends at
+most two sound classes per letter it consumes). `add(both)` pushes the same sound
+class onto both keys; `add(primary, alternate)` pushes different classes, which is
+how a word grows two readings. Each class is a string literal, so an append is a
+copy of a size known at compile time, and a single-key walk compiles the other
+append away. Most letters push the same thing onto both keys; the keys diverge
+only where a rule explicitly calls for it.
 
 The main loop walks the word one position at a time. A `switch` over the current
 letter decides what to append and how far to advance. Each case is a faithful
@@ -68,13 +78,13 @@ initial consonant), why `Smith` grows an `X` alternate (the initial `SM` reads
 "Thompson" fall away. Vowels are kept only at the very start of the word and
 dropped elsewhere, which is standard Double Metaphone.
 
-Two free helpers gate several rules. `slavo_germanic` returns true when the word
-contains `W`, `K`, `CZ`, or `WITZ` anywhere, a cheap proxy for "this spelling
-looks Slavic or Germanic" that pushes a few rules toward hard `K` and `TS`/`F`
-readings. `germanic` is the tighter, start-anchored test (`VAN `, `VON `, `SCH`
-at the front) that specifically forces the `CH`-as-`K` reading. They are not
-interchangeable; using one where the original uses the other changes real
-encodings (it did, during development, on "Czechoslovakia").
+Two helpers gate several rules. The slavo-Germanic test is true when the word
+contains `W`, `K`, `CZ`, or `WITZ` anywhere (`Word` notes it while cleaning), a
+cheap proxy for "this spelling looks Slavic or Germanic" that pushes a few rules
+toward hard `K` and `TS`/`F` readings. `germanic` is the tighter, start-anchored
+test (`VAN `, `VON `, `SCH` at the front) that specifically forces the
+`CH`-as-`K` reading. They are not interchangeable; using one where the original
+uses the other changes real encodings, for example on "Czechoslovakia".
 
 ## Matches the reference implementations
 

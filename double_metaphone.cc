@@ -39,168 +39,218 @@
 
 #include "double_metaphone.h"
 
+#include <cassert>                                // for assert
 #include <cstddef>                                // for std::size_t, std::ptrdiff_t
+#include <cstring>                                // for std::memcmp, std::memcpy, std::memset
+#include <memory>                                 // for std::unique_ptr
 #include <string>                                 // for std::string
 #include <string_view>                            // for std::string_view
-#include <utility>                                // for std::move, std::pair
+#include <utility>                                // for std::pair
 
 
 namespace {
 
-// A tiny cursor over the cleaned word. It owns the upper-cased, A-Z-only text
-// plus a couple of sentinel pad characters past the end, so look-ahead like
-// word[i + 2] is always safe without bounds juggling at every call site. All
-// indexing is relative to `original_first`, the index of the first real letter
-// after any cleaning, which is what the published rules mean by "position 0".
+// How each input byte is cleaned: a letter maps to its upper-case form, a space
+// or a tab maps to ' ', every other byte (digits, punctuation, UTF-8 bytes) to 0.
+struct CleanTable {
+	char map[256];
+	constexpr CleanTable() : map() {
+		for (int c = 0; c < 256; ++c) {
+			map[c] = 0;
+		}
+		for (int c = 'A'; c <= 'Z'; ++c) {
+			map[c] = static_cast<char>(c);
+			map[c + ('a' - 'A')] = static_cast<char>(c);
+		}
+		map[' '] = ' ';
+		map['\t'] = ' ';
+	}
+};
+constexpr CleanTable clean_table;
+
+// The vowels A E I O U Y.
+struct VowelTable {
+	bool map[256];
+	constexpr VowelTable() : map() {
+		for (char c : {'A', 'E', 'I', 'O', 'U', 'Y'}) {
+			map[static_cast<unsigned char>(c)] = true;
+		}
+	}
+};
+constexpr VowelTable vowel_table;
+
+
+// A cursor over the cleaned word: upper-case letters and single interior
+// spaces, held between blank padding (four blanks in front, six behind), so
+// look-ahead and look-behind like at(i - 4) or at(i + 3) never need a bounds
+// check and read as a non-letter. Indices are relative to the first letter,
+// which is what the published rules mean by "position 0". Words of up to
+// 118 bytes are cleaned on the stack.
 class Word {
-	std::string buf_;  // upper-cased letters only, plus padding past the end
-	std::size_t len_;  // number of real letters (padding excluded)
+	static constexpr std::size_t lead = 4;
+	static constexpr std::size_t trail = 6;
+	static constexpr std::size_t stack_size = 128;
+
+	char stack_[stack_size];
+	std::unique_ptr<char[]> heap_;
+	char* first_;       // the first letter; blanks sit in the lead bytes before it
+	std::size_t len_;   // number of letters and interior spaces (padding excluded)
+	bool slavo_ = false;
 
 public:
 	explicit Word(std::string_view in) {
-		buf_.reserve(in.size() + 6);
-		for (char c : in) {
-			// ASCII upper-case in place, keep A-Z plus single interior spaces.
-			// This is the library's own folding (no external strings
-			// dependency); bytes >= 0x80 from UTF-8 input are dropped. Spaces
-			// are kept (collapsed to one) because a few rules key off word
-			// boundaries in multi-word names ("SAN ", "VAN ", "VON ").
-			if (c >= 'a' && c <= 'z') {
-				buf_.push_back(static_cast<char>(c - ('a' - 'A')));
-			} else if (c >= 'A' && c <= 'Z') {
-				buf_.push_back(c);
-			} else if ((c == ' ' || c == '\t') && !buf_.empty() && buf_.back() != ' ') {
-				buf_.push_back(' ');
+		char* base = stack_;
+		if (in.size() + lead + trail > stack_size) {
+			heap_.reset(new char[in.size() + lead + trail]);
+			base = heap_.get();
+		}
+		first_ = base + lead;
+		std::memset(base, ' ', lead);
+		char* out = first_;
+		bool slavo = false;
+		// Upper-case the letters and keep single interior spaces; bytes >= 0x80
+		// from UTF-8 input are dropped. A few rules key off word boundaries in
+		// multi-word names ("SAN ", "VAN ", "VON "), so the spaces stay. The
+		// same pass notes the Slavo-Germanic spellings: a W, a K or "CZ".
+		for (unsigned char c : in) {
+			char m = clean_table.map[c];
+			if (m > ' ') {
+				slavo |= m == 'W' || m == 'K' || (m == 'Z' && out[-1] == 'C');
+				*out++ = m;
+			} else if (m == ' ' && out[-1] != ' ') {
+				// The blanks in front of the first letter also drop leading spaces.
+				*out++ = ' ';
 			}
 		}
 		// Trim a trailing space the collapsing may have left.
-		while (!buf_.empty() && buf_.back() == ' ') {
-			buf_.pop_back();
+		while (out != first_ && out[-1] == ' ') {
+			--out;
 		}
-		len_ = buf_.size();
-		// Pad so look-ahead a few past the end is always in-bounds and reads as
-		// a non-letter ' ' that matches no rule.
-		buf_.append(6, ' ');
+		len_ = static_cast<std::size_t>(out - first_);
+		slavo_ = slavo;
+		std::memset(out, ' ', trail);
 	}
 
 	std::size_t length() const { return len_; }
 
-	// Character at absolute index (0-based over the real letters). Out-of-range
-	// indices read the padding (or, for negatives, ' '): never a real letter.
+	// Does the word contain a W, a K or "CZ" (which includes "WITZ")?
+	bool slavo_germanic() const { return slavo_; }
+
+	// Character at index `i`, which may run four before the first letter and
+	// five past the last: those read as a blank, never as a letter.
 	char at(std::ptrdiff_t i) const {
-		if (i < 0 || static_cast<std::size_t>(i) >= buf_.size()) {
-			return ' ';
-		}
-		return buf_[static_cast<std::size_t>(i)];
+		assert(i >= -static_cast<std::ptrdiff_t>(lead) &&
+		       i < static_cast<std::ptrdiff_t>(len_ + trail));
+		return first_[i];
 	}
 
-	// The substring [start, start + n). Clamped so it never reads padding as if
-	// it were content; an out-of-range request yields a shorter/empty view.
-	std::string_view substr(std::ptrdiff_t start, std::size_t n) const {
-		if (start < 0) {
-			return {};
-		}
-		auto s = static_cast<std::size_t>(start);
-		if (s >= len_) {
-			return {};
-		}
-		if (n > len_ - s) {
-			n = len_ - s;
-		}
-		return std::string_view(buf_).substr(s, n);
-	}
-
-	// Does the n-length window at `start` equal `what`? (length-guarded compare)
-	bool match_at(std::ptrdiff_t start, std::string_view what) const {
-		return substr(start, what.size()) == what;
+	// Does `what` (a string literal) sit entirely inside the word at `start`?
+	template <std::size_t N>
+	bool match_at(std::ptrdiff_t start, const char (&what)[N]) const {
+		return start >= 0 && static_cast<std::size_t>(start) + (N - 1) <= len_ &&
+		       std::memcmp(first_ + start, what, N - 1) == 0;
 	}
 
 	// Is the character at `i` one of the ASCII vowels (A E I O U Y)?
 	bool is_vowel(std::ptrdiff_t i) const {
-		switch (at(i)) {
-			case 'A': case 'E': case 'I': case 'O': case 'U': case 'Y':
-				return true;
-			default:
-				return false;
-		}
+		return vowel_table.map[static_cast<unsigned char>(at(i))];
 	}
 };
 
 
-// Collects the two keys as the walk proceeds. `add(p)` pushes the same class to
-// both; `add(p, a)` pushes a primary class and a (possibly different) alternate
-// class, which is how a word grows two readings.
+// Which keys a walk builds: the primary, the alternate, or both. A walk that
+// needs one key skips every append to the other.
+enum : int { primary_key = 1, alternate_key = 2, both_keys = 3 };
+
+// Collects the keys as the walk proceeds, each into a caller-sized buffer.
+// `add(p)` pushes the same class to both; `add(p, a)` pushes a primary class
+// and a (possibly different) alternate class, which is how a word grows two
+// readings. The classes are string literals, so each append is a copy of a
+// size known at compile time.
+template <int Mode>
 class Keys {
-	std::string primary_;
-	std::string alternate_;
+	char* p_;
+	char* a_;
 
 public:
-	void add(std::string_view both) {
-		primary_ += both;
-		alternate_ += both;
+	Keys(char* primary, char* alternate) : p_(primary), a_(alternate) {}
+
+	template <std::size_t N>
+	void add(const char (&both)[N]) {
+		add(both, both);
 	}
 
-	void add(std::string_view p, std::string_view a) {
-		primary_ += p;
-		alternate_ += a;
+	template <std::size_t N, std::size_t M>
+	void add(const char (&p)[N], const char (&a)[M]) {
+		if constexpr ((Mode & primary_key) != 0) {
+			std::memcpy(p_, p, N - 1);
+			p_ += N - 1;
+		}
+		if constexpr ((Mode & alternate_key) != 0) {
+			std::memcpy(a_, a, M - 1);
+			a_ += M - 1;
+		}
 	}
 
-	std::string take_primary() { return std::move(primary_); }
-	std::string take_alternate() { return std::move(alternate_); }
+	const char* primary_end() const { return p_; }
+	const char* alternate_end() const { return a_; }
 };
 
 
-// Does the word look Slavo-Germanic? A handful of rules lean toward hard 'K'
-// and TS/F readings for these (often German/Slavic) spellings. The original
-// detects it by the presence of W, K, "CZ", or "WITZ" anywhere in the word.
-bool slavo_germanic(const Word& w) {
-	auto len = static_cast<std::ptrdiff_t>(w.length());
-	for (std::ptrdiff_t i = 0; i < len; ++i) {
-		char c = w.at(i);
-		if (c == 'W' || c == 'K' ||
-		    w.match_at(i, "CZ") || w.match_at(i, "WITZ")) {
+// Does the word START with a Germanic marker ("VAN ", "VON ", or "SCH")? This
+// is a tighter test than `Word::slavo_germanic` and gates the CH-as-K reading.
+bool germanic(const Word& w) {
+	return w.match_at(0, "VAN ") || w.match_at(0, "VON ") || w.match_at(0, "SCH");
+}
+
+// True if `c` is any of the listed characters (helper for the CH rules).
+template <std::size_t N>
+bool is_any(char c, const char (&set)[N]) {
+	for (std::size_t k = 0; k + 1 < N; ++k) {
+		if (set[k] == c) {
 			return true;
 		}
 	}
 	return false;
 }
 
-// Does the word START with a Germanic marker ("VAN ", "VON ", or "SCH")? This
-// is a tighter test than slavo_germanic and gates the CH-as-K reading.
-bool germanic(const Word& w) {
-	return w.match_at(0, "VAN ") || w.match_at(0, "VON ") || w.match_at(0, "SCH");
-}
 
-// True if `c` is any of the listed characters (helper for the CH rules).
-bool is_any(char c, std::string_view set) {
-	return set.find(c) != std::string_view::npos;
-}
-
-} // namespace
-
-
-std::pair<std::string, std::string> DoubleMetaphone::encode_both(std::string_view word) const {
+// Walks the word once and writes the keys that `Mode` asks for into
+// `*primary` and `*alternate` (the other pointer may be null). Both are empty
+// for a word with no letters.
+template <int Mode>
+void encode_keys(std::string_view word, std::string* primary, std::string* alternate) {
 	Word w(word);
-	Keys keys;
 
 	const auto n = static_cast<std::ptrdiff_t>(w.length());
 	if (n == 0) {
-		return {std::string(), std::string()};
+		return;
 	}
 
-	const bool slavo = slavo_germanic(w);
+	// A step appends at most two classes of one letter each for every letter it
+	// consumes, so a key never outgrows 2n + 2; the buffers hold 3n + 3.
+	char stack_keys[2][256];
+	std::unique_ptr<char[]> heap_keys;
+	char* primary_buf = stack_keys[0];
+	char* alternate_buf = stack_keys[1];
+	const std::size_t capacity = 3 * static_cast<std::size_t>(n) + 3;
+	if (capacity > sizeof stack_keys[0]) {
+		heap_keys.reset(new char[2 * capacity]);
+		primary_buf = heap_keys.get();
+		alternate_buf = primary_buf + capacity;
+	}
+	Keys<Mode> keys(primary_buf, alternate_buf);
+
+	const bool slavo = w.slavo_germanic();
 	const bool germ = germanic(w);
 
 	// Skip a silent first letter in certain Germanic/Greek initial clusters:
 	// GN, KN, PN, WR all start with a silent consonant; "PS" likewise (as in
 	// "psychology"). Position 0 of the algorithm then sits on the second letter.
 	std::ptrdiff_t i = 0;
-	{
-		auto first2 = w.substr(0, 2);
-		if (first2 == "GN" || first2 == "KN" || first2 == "PN" ||
-		    first2 == "WR" || first2 == "PS") {
-			i = 1;
-		}
+	if (w.match_at(0, "GN") || w.match_at(0, "KN") || w.match_at(0, "PN") ||
+	    w.match_at(0, "WR") || w.match_at(0, "PS")) {
+		i = 1;
 	}
 
 	// Initial 'X' is pronounced 'Z' ("Xavier" -> S... no, Z-sound -> 'S' class).
@@ -796,5 +846,31 @@ std::pair<std::string, std::string> DoubleMetaphone::encode_both(std::string_vie
 		}
 	}
 
-	return {keys.take_primary(), keys.take_alternate()};
+	if constexpr ((Mode & primary_key) != 0) {
+		primary->assign(primary_buf, static_cast<std::size_t>(keys.primary_end() - primary_buf));
+	}
+	if constexpr ((Mode & alternate_key) != 0) {
+		alternate->assign(alternate_buf, static_cast<std::size_t>(keys.alternate_end() - alternate_buf));
+	}
+}
+
+} // namespace
+
+
+std::string DoubleMetaphone::encode(std::string_view word) const {
+	std::string primary;
+	encode_keys<primary_key>(word, &primary, nullptr);
+	return primary;
+}
+
+std::string DoubleMetaphone::encode_alternate(std::string_view word) const {
+	std::string alternate;
+	encode_keys<alternate_key>(word, nullptr, &alternate);
+	return alternate;
+}
+
+std::pair<std::string, std::string> DoubleMetaphone::encode_both(std::string_view word) const {
+	std::pair<std::string, std::string> keys;
+	encode_keys<both_keys>(word, &keys.first, &keys.second);
+	return keys;
 }

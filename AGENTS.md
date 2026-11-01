@@ -9,11 +9,16 @@ easy to fall into.
 
 ```
 double_metaphone.h     Public class DoubleMetaphone (declaration + small inline methods). Header.
-double_metaphone.cc    The encoder: encode_both() and its Word/Keys helpers and rule switch.
+double_metaphone.cc    The encoder: encode_keys<Mode>() and its Word/Keys helpers and rule switch; encode, encode_alternate and encode_both instantiate it.
 test/test.cc           Runnable smoke test: documented vectors, homophone collapse, interface.
+test/diff_test.cc      Differential test (CTest `double_metaphone_diff`): every key of 7M inputs (all strings up to 4 letters, reduced alphabets, random text, /usr/share/dict/words) against the frozen original.
+test/double_metaphone_old.{h,cc}  Frozen copy of the encoder at 91c17a2, class DoubleMetaphoneOld. The oracle of diff_test.cc and the baseline of bench/bench.cc. Never edit it.
+bench/bench.cc         Benchmark against the frozen copy (DOUBLE_METAPHONE_BUILD_BENCH=ON), with an A/A column.
+tools/mutants.py       Breaks the encoder's primitives in 19 ways and requires test/diff_test.cc to fail on each.
 examples/demo.cc       Runnable tour (not a test): prints primary/alternate keys per group.
-CMakeLists.txt         Compiled library `double_metaphone` (+ alias double_metaphone::double_metaphone); CTest test `double_metaphone`.
+CMakeLists.txt         Compiled library `double_metaphone` (+ alias double_metaphone::double_metaphone); CTest tests `double_metaphone` and `double_metaphone_diff`.
 LICENSE                MIT, Copyright (c) 2015-2019 Dubalu LLC.
+CHANGELOG.md           Dated changes, with measurements.
 README.md                    What it is, install, quick start.
 docs/API.md                  The encoder's API and how to compare keys.
 docs/double-metaphone.d2     The README diagram's source (docs/double-metaphone.svg is rendered from it).
@@ -65,10 +70,16 @@ target is `double_metaphone_test`; the registered CTest name is
   (both `XMT`). Words that sound alike must share a key across the
   `{primary, alternate}` cross-product. The test pins this and a few pairs
   Soundex misses (`Knight`/`Night`, `Wright`/`Rite`); keep them passing.
-- **Two keys, built in one pass.** `encode_both` is the only place the algorithm
+- **Two keys, built in one pass.** `encode_keys` is the only place the algorithm
   lives. `Keys::add(both)` pushes to both keys; `add(primary, alternate)` is how
   they diverge. Don't split the algorithm into two passes; the readings are
-  built in lockstep.
+  built in lockstep. A walk that needs one key (`encode`, `encode_alternate`)
+  is the same walk with the other key's appends compiled away, so no rule may
+  read a key to decide a step.
+- **The output is pinned by `test/diff_test.cc`.** Keys are stored in indexes, so
+  every key of every input equals the frozen original's. A rule change is an
+  owner decision: it needs the diff test to list the changed input class
+  explicitly. After touching `Word`, `Keys` or `match_at`, run `tools/mutants.py`.
 
 ## Standard P handling
 
@@ -83,11 +94,11 @@ fails, which is the signal that you broke the canonical behavior.
 
 ## Traps
 
-- **Index math runs past the ends on purpose.** The `Word` cursor pads blanks
-  past the end and treats negative or out-of-range indices as a non-letter
-  space, so a rule can freely read `at(i - 4)` or `at(i + 3)` without bounds
-  checks at every call site. Keep new rules going through `Word::at` /
-  `match_at` / `substr`; do not index the raw buffer directly.
+- **Index math runs past the ends on purpose.** The `Word` cursor holds four
+  blanks in front of the first letter and six behind the last, so a rule can read
+  `at(i - 4)` or `at(i + 3)` without bounds checks at every call site. Reaching
+  further than that is a bug: keep new rules going through `Word::at` /
+  `match_at`, and keep their reach within the padding.
 - **`slavo_germanic` and `germanic` are different tests.** The first is "W/K/CZ/
   WITZ anywhere"; the second is "starts with VAN /VON /SCH". A handful of rules
   pick one specifically (the `CH`-as-`K` reading uses `germanic`, the `Z` and
