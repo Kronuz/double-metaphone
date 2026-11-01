@@ -8,6 +8,12 @@ library has no releases.
 
 ### Added
 
+- `bench/bench.cc` times [PostgreSQL](https://github.com/postgres/postgres)'s `dmetaphone.c`
+  (`REL_17_0`, `contrib/fuzzystrmatch`, a C port of Text::DoubleMetaphone) beside the encoder,
+  fetched as one file and built only with `-DDOUBLE_METAPHONE_BENCH_REFERENCE=ON`. It first
+  counts the words on which the two give the same keys, ours cut to PostgreSQL's four
+  characters.
+
 - `docs/perf/encoder-cost.md`: the method, the numbers on two machines, where a call goes, and the open items.
 
 ## 2026-10-31

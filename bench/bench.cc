@@ -1,17 +1,20 @@
-// Benchmark: DoubleMetaphone against the frozen original (test/double_metaphone_old.*).
-//
-// No third-party Double Metaphone library exists for C++ in the tree, so the baseline is the
-// frozen original. Each row is the best of several passes over the same words; the "A/A" column
-// times the frozen original against itself and shows the noise of the run.
+// Benchmark: DoubleMetaphone against the frozen original (test/double_metaphone_old.*) and, when
+// built with DOUBLE_METAPHONE_BENCH_REFERENCE, PostgreSQL's contrib/fuzzystrmatch dmetaphone.c
+// (the C port of Text::DoubleMetaphone that PostgreSQL ships), fetched by the build for this
+// target only. That port computes both keys on every call and stops once each key has four
+// characters, so before timing the benchmark counts the words on which its keys equal ours cut
+// to four characters. Each row is the best of several passes over the same words; the "A/A"
+// column times the frozen original against itself and shows the noise of the run.
 //
 // Build: cmake -B build -DCMAKE_BUILD_TYPE=Release -DDOUBLE_METAPHONE_BUILD_BENCH=ON
-//        cmake --build build --target double_metaphone_bench
+//        [-DDOUBLE_METAPHONE_BENCH_REFERENCE=ON] cmake --build build --target double_metaphone_bench
 // Run:   ./build/double_metaphone_bench [word-file]    (one word per line; default: generated)
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <random>
 #include <string>
@@ -19,6 +22,11 @@
 
 #include "../test/double_metaphone_old.h"
 #include "double_metaphone.h"
+
+#ifdef DOUBLE_METAPHONE_BENCH_REFERENCE
+// pg_dmetaphone.c: PostgreSQL's DoubleMetaphone(), codes[0] and codes[1] malloc'd for the caller.
+extern "C" void pg_double_metaphone_codes(const char* word, char** codes);
+#endif
 
 namespace {
 
@@ -114,11 +122,42 @@ std::size_t new_both(const std::string& w) { auto p = new_dm.encode_both(w); ret
 std::size_t old_ctor(const std::string& w) { return DoubleMetaphoneOld(w).encode().size(); }
 std::size_t new_ctor(const std::string& w) { return DoubleMetaphone(w).encode().size(); }
 
+#ifdef DOUBLE_METAPHONE_BENCH_REFERENCE
+std::size_t pg_both(const std::string& w) {
+	char* codes[2];
+	pg_double_metaphone_codes(w.c_str(), codes);
+	const std::size_t n = std::strlen(codes[0]) + std::strlen(codes[1]);
+	std::free(codes[0]);
+	std::free(codes[1]);
+	return n;
+}
+
+// How many words get PostgreSQL's two keys from this library's, cut to four characters.
+void agreement(const char* set, const std::vector<std::string>& words) {
+	std::size_t same = 0;
+	for (const auto& w : words) {
+		char* codes[2];
+		pg_double_metaphone_codes(w.c_str(), codes);
+		auto keys = new_dm.encode_both(w);
+		keys.first.resize(std::min<std::size_t>(keys.first.size(), 4));
+		keys.second.resize(std::min<std::size_t>(keys.second.size(), 4));
+		same += keys.first == codes[0] && keys.second == codes[1];
+		std::free(codes[0]);
+		std::free(codes[1]);
+	}
+	std::printf("%-8s PostgreSQL dmetaphone.c: both keys equal ours cut to 4 characters on %zu of %zu (%.2f%%)\n", set, same,
+	            words.size(), 100.0 * static_cast<double>(same) / static_cast<double>(words.size()));
+}
+#endif
+
 void rows(const char* set, const std::vector<std::string>& words) {
 	row(set, "encode", words, old_primary, new_primary);
 	row(set, "encode_alternate", words, old_alternate, new_alternate);
 	row(set, "encode_both", words, old_both, new_both);
 	row(set, "construct+encode()", words, old_ctor, new_ctor);
+#ifdef DOUBLE_METAPHONE_BENCH_REFERENCE
+	std::printf("%-8s %-19s PostgreSQL dmetaphone.c %8.1f ns (both keys)\n", set, "", best_ns(words, pg_both));
+#endif
 }
 
 } // namespace
@@ -137,6 +176,12 @@ int main(int argc, char** argv) {
 
 	std::printf("double_metaphone bench: %zu dictionary words, %zu names, %zu phrases, %zu long\n",
 	            dict.size(), names.size(), phrases.size(), longs.size());
+#ifdef DOUBLE_METAPHONE_BENCH_REFERENCE
+	agreement("words", dict);
+	agreement("names", names);
+	agreement("phrases", phrases);
+	agreement("long", longs);
+#endif
 	rows("words", dict);
 	rows("names", names);
 	rows("phrases", phrases);
