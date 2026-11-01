@@ -76,24 +76,32 @@ Not for:
 
 Time per call from `double_metaphone_bench` (the best of 9 passes over each set, one call per
 item), Apple clang 17 with `-O3`, on an Apple M4 Pro (macOS 26, arm64) and an Intel Core i9-9980HK
-(macOS 15, x86-64). `encode` is the call that returns the primary key and `encode_both` the call
-that returns both keys. Rows are the input: dictionary words (the first 100,000 words of
+(macOS 15, x86-64). Each machine has three columns. `encode` is this library's call that returns
+the primary key and `encode_both` its call that returns both keys. *PostgreSQL* is
+[`dmetaphone.c`](https://github.com/postgres/postgres/blob/REL_17_0/contrib/fuzzystrmatch/dmetaphone.c)
+from PostgreSQL `REL_17_0`, the C port of Text::DoubleMetaphone in `contrib/fuzzystrmatch`, which
+the benchmark downloads and compiles for itself. It always computes both keys and stops once each
+has four characters. Rows are the input: dictionary words (the first 100,000 words of
 `/usr/share/dict/words`), names and phrases made from English-like syllables so that the common
-rules fire, and longer texts:
+rules fire, and longer texts. Lower is faster.
 
+| Input | M4 Pro: `encode` | `encode_both` | PostgreSQL | i9-9980HK: `encode` | `encode_both` | PostgreSQL |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| dictionary word (3 to 12 letters) | 60 ns | 69 ns | 196 ns | 99 ns | 113 ns | 496 ns |
+| name (4 to 9 letters) | 69 ns | 77 ns | 207 ns | 110 ns | 130 ns | 534 ns |
+| phrase (40 to 80 characters) | 576 ns | 607 ns | 334 ns | 866 ns | 981 ns | 712 ns |
+| text (200 to 600 characters) | 2.8 µs | 2.9 µs | 644 ns | 4.9 µs | 5.3 µs | 1.4 µs |
 
-| Input | `encode`, Apple M4 Pro | `encode_both`, Apple M4 Pro | `encode`, Intel Core i9-9980HK | `encode_both`, Intel Core i9-9980HK |
-| --- | ---: | ---: | ---: | ---: |
-| dictionary word (3 to 12 letters) | 61 ns | 69 ns | 104 ns | 105 ns |
-| name (4 to 9 letters) | 72 ns | 77 ns | 117 ns | 126 ns |
-| phrase (40 to 80 characters) | 580 ns | 607 ns | 897 ns | 947 ns |
-| text (200 to 600 characters) | 2.9 µs | 3.0 µs | 4.8 µs | 4.9 µs |
-
-A call builds only the key it returns: `encode_alternate` is within 7% of `encode`, and
-`encode_both` costs 1% to 13% more than one key.
+The two give the same keys on 98.6% of the 100,000 dictionary words (98,566; ours cut to
+PostgreSQL's four characters); the benchmark prints the count for each set before it times
+anything. On words and names this encoder takes 2.7x to 4.4x less time for both keys than
+PostgreSQL; on phrases and texts PostgreSQL is 1.4x to 4.5x faster, because it stops at four
+characters and this encoder reads the whole input. A call builds only the key it returns:
+`encode_alternate` is within 5% of `encode`, and `encode_both` costs 3% to 18% more than one key.
 
 ```sh
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DDOUBLE_METAPHONE_BUILD_BENCH=ON && cmake --build build
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DDOUBLE_METAPHONE_BUILD_BENCH=ON \
+  -DDOUBLE_METAPHONE_BENCH_REFERENCE=ON && cmake --build build
 ./build/double_metaphone_bench /usr/share/dict/words
 ```
 
