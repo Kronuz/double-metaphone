@@ -83,10 +83,11 @@ target is `double_metaphone_test`; the registered CTest name is
 
 ## Standard P handling
 
-This encoder matches a well-known reference implementation across a few hundred
-words, with no departures. The `P` rule only special-cases `PH` -> `F`; `P` is
-otherwise kept, so `Thompson` -> `TMPSN` and `Pfister` -> `PFSTR` (agreeing with
-the common ports). Don't reintroduce `MP`/`PF` silencing.
+The `P` rule only special-cases `PH` -> `F`; `P` is otherwise kept, so `Thompson` ->
+`TMPSN` and `Pfister` -> `PFSTR` (agreeing with the Python port). Don't reintroduce
+`MP`/`PF` silencing. On the dictionary this encoder and that port disagree on 2.1% of
+the words, in the classes that `ARCHITECTURE.md` lists; they are pinned by
+`test/diff_test.cc`, and changing one is the owner's decision.
 
 These follow the original Lawrence Philips description, not the JS/Java ports.
 **Do not "fix" them toward the ports.** If you do, the documented-vector test

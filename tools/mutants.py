@@ -89,7 +89,12 @@ for name, (old, new) in MUTANTS.items():
         print(f"{name}: does not compile\n{built.stderr[:400]}")
         survivors.append(name)
         continue
-    ran = subprocess.run([exe], capture_output=True, text=True)
+    try:
+        ran = subprocess.run([exe], capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        print(f"{name}: killed (the test does not finish)")
+        shutil.rmtree(d, ignore_errors=True)
+        continue
     if ran.returncode == 0:
         print(f"{name}: SURVIVED")
         survivors.append(name)

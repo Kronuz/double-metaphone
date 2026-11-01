@@ -86,12 +86,27 @@ test (`VAN `, `VON `, `SCH` at the front) that specifically forces the
 `CH`-as-`K` reading. They are not interchangeable; using one where the original
 uses the other changes real encodings, for example on "Czechoslovakia".
 
-## Matches the reference implementations
+## Agreement with a reference port
 
-The encoder is checked against an established reference implementation across a
-few hundred words and matches it everywhere, including the cases the `P` rule
-decides: `Thompson` -> `TMPSN` and `Pfister` -> `PFSTR`. The `P` is kept (only
-`PH` collapses to `F`), agreeing with the widely-copied JavaScript and Java ports.
+The keys are checked against the Python port `Metaphone` (PyPI) over the 235,976 words of
+`/usr/share/dict/words`. They agree on 97.9% of the words and on every documented vector
+except `dumb` (this encoder gives `TM`, the port `TMP`), including the cases the `P` rule
+decides: `Thompson` -> `TMPSN` and `Pfister` -> `PFSTR`. The `P` is kept (only `PH`
+collapses to `F`).
+
+The 4,945 words that differ fall in these classes, counted by the first that applies:
+
+| words | where the keys differ |
+| ---: | --- |
+| 2,991 | `G` before `E`, `I` or `Y` inside a word: for `GES GEP GEB GEL GEI GER GIB GIL GIN GIE` and `GY` this encoder gives `K` as the primary key and `J` as the alternate, wherever they occur; the port gives `J` and `K` |
+| 1,391 | `TIO`, `TIA` and `CIA`: `X` here, `T` or `S` in the port |
+| 111 | `UMB` |
+| 109 | `CH`, for example the initial `ACH` |
+| 92 | `GH` and `GN` |
+| 251 | other `G` rules |
+
+`test/diff_test.cc` pins the keys of this encoder, and keys are stored in indexes, so a change
+to any of these classes is a decision for the owner.
 
 ## No truncation
 
