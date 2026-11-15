@@ -110,6 +110,8 @@ its time.
 
 ## 📚 Documentation
 
+- [Smith and Schmidt](https://kronuz.github.io/blog/double-metaphone/):
+  the Familiars post on why it exists and how it works.
 - [docs/API.md](docs/API.md): `encode`, `encode_alternate`, `encode_both`, and how to compare
   keys.
 - [ARCHITECTURE.md](ARCHITECTURE.md): how the rule set is organized.
